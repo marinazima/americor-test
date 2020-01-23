@@ -44,6 +44,16 @@ $config = [
             ],
         ],
         'db' => $db,
+        'urlManager' => [
+            'enablePrettyUrl' => true,
+            'showScriptName' => false,
+            'normalizer' => [
+                'class' => \yii\web\UrlNormalizer::class,
+            ],
+            'rules' => require('rules.php'),
+            'baseUrl' => '/',
+
+        ],
         /*
         'urlManager' => [
             'enablePrettyUrl' => true,
@@ -67,7 +77,7 @@ if (YII_ENV_DEV) {
     $config['modules']['debug'] = [
         'class' => 'yii\debug\Module',
         // uncomment the following to add your IP if you are not connecting from localhost.
-        //'allowedIPs' => ['127.0.0.1', '::1'],
+        'allowedIPs' => ['*'],
     ];
 
     $config['bootstrap'][] = 'gii';

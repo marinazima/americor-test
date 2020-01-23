@@ -2,8 +2,24 @@
 
 namespace app\models;
 
-use app\models\traits\ObjectNameTrait;
+use app\behaviors\JsonBehavior;
+use app\dto\HistoryDto;
+use app\types\history\event\CallIncomingType;
+use app\types\history\event\CallOutgoingType;
+use app\types\history\event\CustomerChangeQualityType;
+use app\types\history\event\CustomerChangeTypeType;
+use app\types\history\event\FaxIncomingType;
+use app\types\history\event\FaxOutgoingType;
+use app\types\history\event\SmsIncomingType;
+use app\types\history\event\SmsOutgoingType;
+use app\types\history\event\TaskCompletedType;
+use app\types\history\event\TaskCreatedType;
+use app\types\history\event\TaskUpdatedType;
+use app\types\history\event\TypeInterface;
 use Yii;
+use yii\db\ActiveQuery;
+use yii\db\Expression;
+use yii\helpers\ArrayHelper;
 
 /**
  * This is the model class for table "{{%history}}".
@@ -15,17 +31,25 @@ use Yii;
  * @property string $object
  * @property integer $object_id
  * @property string $message
- * @property string $detail
+ * @property array $detail
  * @property integer $user_id
  *
  * @property string $eventText
  *
  * @property Customer $customer
  * @property User $user
+ * @property Task $task
+ * @property Sms $sms
+ * @property Call $call
+ * @property Fax $fax
+ *
  */
 class History extends \yii\db\ActiveRecord
 {
-    use ObjectNameTrait;
+    const OBJECT_TASK = 'task';
+    const OBJECT_SMS = 'sms';
+    const OBJECT_CALL = 'call';
+    const OBJECT_FAX = 'fax';
 
     const EVENT_CREATED_TASK = 'created_task';
     const EVENT_UPDATED_TASK = 'updated_task';
@@ -49,6 +73,20 @@ class History extends \yii\db\ActiveRecord
     public static function tableName()
     {
         return '{{%history}}';
+    }
+
+    /**
+     * @return array
+     */
+    public function behaviors()
+    {
+        return [
+            'JsonBehavior' => [
+                'class' => JsonBehavior::class,
+                'attribute' => 'detail',
+                'value' => 'detail',
+            ],
+        ];
     }
 
     /**
@@ -86,25 +124,72 @@ class History extends \yii\db\ActiveRecord
     }
 
     /**
-     * @return \yii\db\ActiveQuery
+     * @return null|TypeInterface
      */
-    public function getCustomer()
+    public function createEventType(): ?TypeInterface
     {
-        return $this->hasOne(Customer::className(), ['id' => 'customer_id']);
+        if($eventClass = $this->getEventTypeClass()) {
+            /** @var TypeInterface $type */
+            $type = Yii::createObject($eventClass, [
+                $this,
+            ]);
+        }
+        return $type ?? null;
     }
 
     /**
      * @return \yii\db\ActiveQuery
      */
-    public function getUser()
+    public function getCustomer(): ActiveQuery
     {
-        return $this->hasOne(User::className(), ['id' => 'user_id']);
+        return $this->hasOne(Customer::class, ['id' => 'customer_id']);
+    }
+
+    /**
+     * @return \yii\db\ActiveQuery
+     */
+    public function getUser(): ActiveQuery
+    {
+        return $this->hasOne(User::class, ['id' => 'user_id']);
+    }
+
+    /**
+     * @return ActiveQuery
+     */
+    public function getTask(): ActiveQuery
+    {
+        return $this->hasOne(Task::class, ['id' => 'object_id']);
+    }
+
+    /**
+     * @return ActiveQuery
+     */
+    public function getSms(): ActiveQuery
+    {
+        return $this->hasOne(Sms::class, ['id' => 'object_id']);
+    }
+
+    /**
+     * @return ActiveQuery
+     */
+    public function getCall(): ActiveQuery
+    {
+        return $this->hasOne(Call::class, ['id' => 'object_id']);
+
+    }
+
+    /**
+     * @return ActiveQuery
+     */
+    public function getFax(): ActiveQuery
+    {
+        return $this->hasOne(Fax::class, ['id' => 'object_id']);
     }
 
     /**
      * @return array
      */
-    public static function getEventTexts()
+    public static function getEventTexts(): array
     {
         return [
             self::EVENT_CREATED_TASK => Yii::t('app', 'Task created'),
@@ -114,72 +199,70 @@ class History extends \yii\db\ActiveRecord
             self::EVENT_INCOMING_SMS => Yii::t('app', 'Incoming message'),
             self::EVENT_OUTGOING_SMS => Yii::t('app', 'Outgoing message'),
 
-            self::EVENT_CUSTOMER_CHANGE_TYPE => Yii::t('app', 'Type changed'),
-            self::EVENT_CUSTOMER_CHANGE_QUALITY => Yii::t('app', 'Property changed'),
-
             self::EVENT_OUTGOING_CALL => Yii::t('app', 'Outgoing call'),
             self::EVENT_INCOMING_CALL => Yii::t('app', 'Incoming call'),
 
             self::EVENT_INCOMING_FAX => Yii::t('app', 'Incoming fax'),
             self::EVENT_OUTGOING_FAX => Yii::t('app', 'Outgoing fax'),
+
+            self::EVENT_CUSTOMER_CHANGE_TYPE => Yii::t('app', 'Type changed'),
+            self::EVENT_CUSTOMER_CHANGE_QUALITY => Yii::t('app', 'Property changed'),
         ];
     }
 
     /**
-     * @param $event
-     * @return mixed
+     * @return array
      */
-    public static function getEventTextByEvent($event)
+    public static function getEventTypeClassList(): array
     {
-        return static::getEventTexts()[$event] ?? $event;
+        return [
+            self::EVENT_CREATED_TASK => TaskCreatedType::class,
+            self::EVENT_UPDATED_TASK => TaskUpdatedType::class,
+            self::EVENT_COMPLETED_TASK => TaskCompletedType::class,
+
+            self::EVENT_INCOMING_SMS => SmsIncomingType::class,
+            self::EVENT_OUTGOING_SMS => SmsOutgoingType::class,
+
+            self::EVENT_INCOMING_CALL => CallIncomingType::class,
+            self::EVENT_OUTGOING_CALL => CallOutgoingType::class,
+
+            self::EVENT_INCOMING_FAX => FaxIncomingType::class,
+            self::EVENT_OUTGOING_FAX => FaxOutgoingType::class,
+
+            self::EVENT_CUSTOMER_CHANGE_TYPE => CustomerChangeTypeType::class,
+            self::EVENT_CUSTOMER_CHANGE_QUALITY => CustomerChangeQualityType::class,
+        ];
     }
 
     /**
-     * @return mixed|string
+     * @return null|string
      */
-    public function getEventText()
+    public function getEventTypeClass(): ?string
     {
-        return static::getEventTextByEvent($this->event);
-    }
-
-
-    /**
-     * @param $attribute
-     * @return null
-     */
-    public function getDetailChangedAttribute($attribute)
-    {
-        $detail = json_decode($this->detail);
-        return isset($detail->changedAttributes->{$attribute}) ? $detail->changedAttributes->{$attribute} : null;
+        return ArrayHelper::getValue(self::getEventTypeClassList(), $this->event);
     }
 
     /**
-     * @param $attribute
-     * @return null
+     * @param null $event
+     * @return null|string
      */
-    public function getDetailOldValue($attribute)
+    public function getEventText($event = null): ?string
     {
-        $detail = $this->getDetailChangedAttribute($attribute);
-        return isset($detail->old) ? $detail->old : null;
+        $event = $event ?: $this->event;
+        return ArrayHelper::getValue(self::getEventTexts(), $event);
     }
 
-    /**
-     * @param $attribute
-     * @return null
-     */
-    public function getDetailNewValue($attribute)
-    {
-        $detail = $this->getDetailChangedAttribute($attribute);
-        return isset($detail->new) ? $detail->new : null;
-    }
 
     /**
      * @param $attribute
-     * @return null
+     * @return HistoryDto|null
      */
-    public function getDetailData($attribute)
+    public function getAudit($attribute): ?HistoryDto
     {
-        $detail = json_decode($this->detail);
-        return isset($detail->data->{$attribute}) ? $detail->data->{$attribute} : null;
+        if($list = ArrayHelper::getValue($this->detail, 'changedAttributes')) {
+            return new HistoryDto(ArrayHelper::getValue($list, $attribute));
+        }
+
+        return null;
     }
 }
