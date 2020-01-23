@@ -29,6 +29,7 @@ Please NOTE:
 
 copy .env.dist to .env and change DB connection, etc
 
+~~~
  YII_DEBUG=true
  YII_ENV=dev
  
@@ -37,3 +38,4 @@ copy .env.dist to .env and change DB connection, etc
  MYSQL_PASSWORD=
  MYSQL_DATABASE=americor
  MYSQL_ROOT_PASSWORD=root
+~~~
